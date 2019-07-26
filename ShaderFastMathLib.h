@@ -83,16 +83,18 @@
 //
 // Normalized range [0,1] Constants
 //
-#define IEEE_INT_RCP_CONST_NR0_SNORM        0x7EEF370B
-#define IEEE_INT_SQRT_CONST_NR0_SNORM       0x1FBD1DF5
-#define IEEE_INT_RCP_SQRT_CONST_NR0_SNORM   0x5F341A43
+#define IEEE_INT_RCP_CONST_NR0_SNORM_01        0x7EEF370B
+#define IEEE_INT_SQRT_CONST_NR0_SNORM_01      0x1FBD1DF5
+#define IEEE_INT_RCP_SQRT_CONST_NR0_SNORM_01   0x5F341A43
+
+#define IEEE_INT_4th_ROOT_CONST_NR0_SNORM_01  798731503// IEEE_INT_SQRT_CONST_NR0_SNORM_01 + IEEE_INT_SQRT_CONST_NR0_SNORM_01/2
 
 //
 // Distance [0,1000] based constants
 //
-#define IEEE_INT_RCP_CONST_NR0_SNORM        0x7EF3210C  
-#define IEEE_INT_SQRT_CONST_NR0_SNORM       0x1FBD22DF
-#define IEEE_INT_RCP_SQRT_CONST_NR0_SNORM   0x5F33E79F
+//#define IEEE_INT_RCP_CONST_NR0_SNORM        0x7EF3210C  
+//#define IEEE_INT_SQRT_CONST_NR0_SNORM       0x1FBD22DF
+//#define IEEE_INT_RCP_SQRT_CONST_NR0_SNORM   0x5F33E79F
 
 //
 // RCP SQRT
@@ -122,6 +124,12 @@ float fastRcpSqrtNR0(float inX)
 	float  xRcpSqrt = rcpSqrtIEEEIntApproximation(inX, IEEE_INT_RCP_SQRT_CONST_NR0);
 	return xRcpSqrt;
 }
+float fastRcpSqrtNR0_01(float inX)
+{
+	float  xRcpSqrt = rcpSqrtIEEEIntApproximation(inX, IEEE_INT_RCP_SQRT_CONST_NR0_SNORM_01);
+	return xRcpSqrt;
+}
+
 
 //
 // Using 1 Newton Raphson iterations
@@ -133,6 +141,14 @@ float fastRcpSqrtNR1(float inX)
 {
 	float  xhalf = 0.5f * inX;
 	float  xRcpSqrt = rcpSqrtIEEEIntApproximation(inX, IEEE_INT_RCP_SQRT_CONST_NR1);
+	xRcpSqrt = rcpSqrtNewtonRaphson(xhalf, xRcpSqrt);
+	return xRcpSqrt;
+}
+
+float fastRcpSqrtNR1_01(float inX)
+{
+	float  xhalf = 0.5f * inX;
+	float  xRcpSqrt = rcpSqrtIEEEIntApproximation(inX, IEEE_INT_RCP_SQRT_CONST_NR0_SNORM_01);
 	xRcpSqrt = rcpSqrtNewtonRaphson(xhalf, xRcpSqrt);
 	return xRcpSqrt;
 }
@@ -174,6 +190,16 @@ float fastSqrtNR0(float inX)
 	float  xRcp = sqrtIEEEIntApproximation(inX, IEEE_INT_SQRT_CONST_NR0);
 	return xRcp;
 }
+float fastSqrtNR0_01(float inX)
+{
+	float  xRcp = sqrtIEEEIntApproximation(inX, IEEE_INT_SQRT_CONST_NR0_SNORM_01);
+	return xRcp;
+}
+float fastSqrtNR1_01(float inX)
+{
+		// Inverse Rcp Sqrt
+	return inX * fastRcpSqrtNR1_01(inX);
+}
 
 //
 // Use inverse Rcp Sqrt
@@ -187,6 +213,11 @@ float fastSqrtNR1(float inX)
 	// Inverse Rcp Sqrt
 	return inX * fastRcpSqrtNR1(inX);
 }
+float3 fastSqrtNR1(float3 inX)
+{
+	return float3(fastSqrtNR1(inX.x), fastSqrtNR1(inX.y), fastSqrtNR1(inX.z));
+}
+
 
 //
 // Use inverse Rcp Sqrt
@@ -199,6 +230,13 @@ float fastSqrtNR2(float inX)
 {
 	// Inverse Rcp Sqrt
 	return inX * fastRcpSqrtNR2(inX);
+}
+
+//approximate pow(x, .25)
+float fastCubeRootNR0_01(float inX){
+	int x = asint(inX);
+	x = IEEE_INT_4th_ROOT_CONST_NR0_SNORM_01 + (x >> 2);
+	return asfloat(x);
 }
 
 //
@@ -217,6 +255,11 @@ float rcpNewtonRaphson(float inX, float inRcpX)
 	return inRcpX * (-inRcpX * inX + 2.0f);
 }
 
+float fastPow5NR0(float inX){
+	int x = asint(inX);
+	x = 526645030 - (x >> 1);
+	return asfloat(x);
+}
 //
 // Using 0 Newton Raphson iterations
 // Relative error : < 0.4% over full
@@ -226,6 +269,11 @@ float rcpNewtonRaphson(float inX, float inRcpX)
 float fastRcpNR0(float inX)
 {
 	float  xRcp = rcpIEEEIntApproximation(inX, IEEE_INT_RCP_CONST_NR0);
+	return xRcp;
+}
+float fastRcpNR0_01(float inX)
+{
+	float  xRcp = rcpIEEEIntApproximation(inX, IEEE_INT_RCP_CONST_NR0_SNORM_01);
 	return xRcp;
 }
 
@@ -303,5 +351,41 @@ float atanFast4(float inX)
 {
 	float  x = inX;
 	return x*(-0.1784f * abs(x) - 0.0663f * x * x + 1.0301f);
+}
+
+//Dain: i added this, it is just slightly faster than default atan2
+float atan2_mp(float y, float x) {
+	float ax = abs(x);
+	float ay = abs(y);
+	float a = min(ax, ay) *fastRcpNR1(max(ax, ay));
+	float s = a*a;
+
+	float r = mad(mad(mad((-0.0464964749), s, (0.15931422)), s, (-0.327622764)), s*a, a);
+
+	r = (ay > ax)?  (1.57079632679f - r): r;
+	r = (x < 0.0 )?  (3.141593f- r): r;
+	r = (y < 0.0) ? -r : r;	
+	return r;
+}
+float3 normalize_rsqrt(float3 v) {
+	float d2 = dot(v, v);
+	return v * rsqrt(d2);
+}
+//very low quality, but fast normalize
+float3 normalizeNR0(float3 v) {
+	float d2 = dot(v, v);
+	return v*fastRcpSqrtNR0(d2);
+}
+float3 normalizeNR0_01(float3 v) {
+	float d2 = dot(v, v);
+	return v * fastRcpSqrtNR1_01(d2);
+}
+float3 normalizeNR1(float3 v) {
+	float d2 = dot(v, v);
+	return v * fastRcpSqrtNR1(d2);
+}
+float3 normalizeNR1_01(float3 v) {
+	float d2 = dot(v, v);
+	return v * fastRcpSqrtNR1_01(d2);
 }
 #endif //SHADER_FAST_MATH_INC_FX
